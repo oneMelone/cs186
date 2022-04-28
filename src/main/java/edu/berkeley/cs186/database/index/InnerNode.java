@@ -81,8 +81,24 @@ class InnerNode extends BPlusNode {
     @Override
     public LeafNode get(DataBox key) {
         // TODO(proj2): implement
-
-        return null;
+        // Binary search find the index of the first value in the list which is larger than the key
+        int left = 0;
+        int right = keys.size() - 1;
+        while (left < right) {
+            int mid = (left + right) >> 1;
+            if (keys.get(mid).compareTo(key) > 0) {
+                right = mid;
+            } else {
+                left = mid + 1;
+            }
+        }
+        if (keys.get(left).compareTo(key) <= 0) {
+            // in this case, left idx point to the position of the last element, while it's
+            //  still less or equal than the key
+            left = left + 1;
+        }
+        // return that Node using getChild
+        return getChild(left).get(key);
     }
 
     // See BPlusNode.getLeftmostLeaf.
