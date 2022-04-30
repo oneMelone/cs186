@@ -9,6 +9,7 @@ import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
 import edu.berkeley.cs186.database.table.RecordId;
 
+import javax.xml.crypto.Data;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -113,6 +114,35 @@ class InnerNode extends BPlusNode {
     @Override
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
+        int insertPoint = Arrays.binarySearch(keys.toArray(), key);
+        if (insertPoint >= 0) {
+            insertPoint += 1;
+        } else {
+            insertPoint = -insertPoint - 1;
+        }
+        Optional<Pair<DataBox, Long>> childInsertRes = getChild(insertPoint).put(key, rid);
+        if (childInsertRes.isPresent()) {
+            // new key insert into keys[insertPosition]
+            // new child insert into children[insertPosition + 1]
+            keys.add(insertPoint, childInsertRes.get().getFirst());
+            children.add(insertPoint + 1, childInsertRes.get().getSecond());
+        }
+
+        // if this node overflow, split this node and return a non-empty value.
+        if (keys.size() > metadata.getOrder() * 2) {
+            List<DataBox> newKeys = keys.subList(metadata.getOrder() + 1, keys.size());
+            DataBox splitKey = keys.get(metadata.getOrder());
+            keys = keys.subList(0, metadata.getOrder());
+            List<Long> newChildren = children.subList(metadata.getOrder() + 1, children.size());
+            children = children.subList(0, metadata.getOrder() + 1);
+
+            InnerNode newInnerNode = new InnerNode(metadata, bufferManager, newKeys, newChildren, treeContext);
+
+            sync();
+            return Optional.of(new Pair<>(splitKey, newInnerNode.getPage().getPageNum()));
+        }
+
+        sync();
 
         return Optional.empty();
     }
