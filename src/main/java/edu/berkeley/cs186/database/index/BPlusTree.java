@@ -11,6 +11,7 @@ import edu.berkeley.cs186.database.io.DiskSpaceManager;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.table.RecordId;
 
+import javax.xml.crypto.Data;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -201,8 +202,7 @@ public class BPlusTree {
         LockUtil.ensureSufficientLockHeld(lockContext, LockType.NL);
 
         // TODO(proj2): Return a BPlusTreeIterator.
-
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator();
     }
 
     /**
@@ -235,7 +235,7 @@ public class BPlusTree {
 
         // TODO(proj2): Return a BPlusTreeIterator.
 
-        return Collections.emptyIterator();
+        return new BPlusTreeIterator(key);
     }
 
     /**
@@ -428,18 +428,42 @@ public class BPlusTree {
     // Iterator ////////////////////////////////////////////////////////////////
     private class BPlusTreeIterator implements Iterator<RecordId> {
         // TODO(proj2): Add whatever fields and constructors you want here.
+        private Iterator<RecordId> currentRidIt;
+        private LeafNode currentLeafNode;
+        private DataBox comparedKey = null;
+
+        public BPlusTreeIterator() {
+            currentLeafNode = root.getLeftmostLeaf();
+            currentRidIt = currentLeafNode.scanAll();
+        }
+
+        public BPlusTreeIterator(DataBox key) {
+            currentLeafNode = root.getLeftmostLeaf();
+            comparedKey = key;
+            currentRidIt = currentLeafNode.scanGreaterEqual(key);
+        }
 
         @Override
         public boolean hasNext() {
             // TODO(proj2): implement
-
-            return false;
+            return currentRidIt.hasNext() || currentLeafNode.getRightSibling().isPresent();
         }
 
         @Override
         public RecordId next() {
             // TODO(proj2): implement
-
+            if (currentRidIt.hasNext()) {
+                return currentRidIt.next();
+            }
+            Optional<LeafNode> rightSibling = currentLeafNode.getRightSibling();
+            if (rightSibling.isPresent()) {
+                currentLeafNode = rightSibling.get();
+                if (comparedKey != null) {
+                    currentRidIt = currentLeafNode.scanGreaterEqual(comparedKey);
+                } else {
+                    currentRidIt = currentLeafNode.scanAll();
+                }
+            }
             throw new NoSuchElementException();
         }
     }
