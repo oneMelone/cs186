@@ -163,7 +163,7 @@ class LeafNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> put(DataBox key, RecordId rid) {
         // TODO(proj2): implement
         int insertPosition = InnerNode.numLessThanEqual(key, keys);
-        if (keys.get(insertPosition - 1).equals(key)) {
+        if (insertPosition > 0 && keys.get(insertPosition - 1).equals(key)) {
             throw new BPlusTreeException("duplicate keys");
         }
         keys.add(insertPosition, key);
@@ -249,6 +249,10 @@ class LeafNode extends BPlusNode {
 
         long pageNum = rightSibling.get();
         return Optional.of(LeafNode.fromBytes(metadata, bufferManager, treeContext, pageNum));
+    }
+
+    public boolean hasRightSibling() {
+        return rightSibling.isPresent();
     }
 
     /** Serializes this leaf to its page. */

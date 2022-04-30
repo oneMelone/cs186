@@ -446,7 +446,7 @@ public class BPlusTree {
         @Override
         public boolean hasNext() {
             // TODO(proj2): implement
-            return currentRidIt.hasNext() || currentLeafNode.getRightSibling().isPresent();
+            return currentRidIt.hasNext() || currentLeafNode.hasRightSibling();
         }
 
         @Override
@@ -455,14 +455,14 @@ public class BPlusTree {
             if (currentRidIt.hasNext()) {
                 return currentRidIt.next();
             }
-            Optional<LeafNode> rightSibling = currentLeafNode.getRightSibling();
-            if (rightSibling.isPresent()) {
-                currentLeafNode = rightSibling.get();
+            if (currentLeafNode.hasRightSibling()) {
+                currentLeafNode = currentLeafNode.getRightSibling().get();
                 if (comparedKey != null) {
                     currentRidIt = currentLeafNode.scanGreaterEqual(comparedKey);
                 } else {
                     currentRidIt = currentLeafNode.scanAll();
                 }
+                return next();
             }
             throw new NoSuchElementException();
         }
