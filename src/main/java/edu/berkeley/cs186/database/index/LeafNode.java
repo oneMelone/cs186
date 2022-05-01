@@ -7,9 +7,11 @@ import edu.berkeley.cs186.database.databox.DataBox;
 import edu.berkeley.cs186.database.databox.Type;
 import edu.berkeley.cs186.database.memory.BufferManager;
 import edu.berkeley.cs186.database.memory.Page;
+import edu.berkeley.cs186.database.table.Record;
 import edu.berkeley.cs186.database.table.RecordId;
 
 import javax.swing.text.html.Option;
+import javax.xml.crypto.Data;
 import java.nio.ByteBuffer;
 import java.util.*;
 
@@ -194,7 +196,30 @@ class LeafNode extends BPlusNode {
     public Optional<Pair<DataBox, Long>> bulkLoad(Iterator<Pair<DataBox, RecordId>> data,
             float fillFactor) {
         // TODO(proj2): implement
+        int shouldSplitDataNum = (int)Math.ceil(2 * metadata.getOrder() * fillFactor) + 1;
+        while (data.hasNext()) {
+            Pair<DataBox, RecordId> nextData = data.next();
 
+            keys.add(nextData.getFirst());
+            rids.add(nextData.getSecond());
+
+            // if this leaf node is full, split and return optional value.
+            if (keys.size() == shouldSplitDataNum) {
+                List<DataBox> newKeys = new ArrayList<>();
+                newKeys.add(keys.get(keys.size() - 1));
+                keys.remove(keys.size() - 1);
+                List<RecordId> newRids = new ArrayList<>();
+                newRids.add(rids.get(rids.size() - 1));
+                rids.remove(rids.size() - 1);
+                LeafNode newLeafNode = new LeafNode(metadata, bufferManager, newKeys, newRids, Optional.empty(), treeContext);
+                Long newNodePateNum = newLeafNode.getPage().getPageNum();
+                rightSibling = Optional.of(newNodePateNum);
+                sync();
+                return Optional.of(new Pair<>(newKeys.get(0), newNodePateNum));
+            }
+        }
+
+        sync();
         return Optional.empty();
     }
 

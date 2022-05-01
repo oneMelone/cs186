@@ -1,6 +1,8 @@
 package edu.berkeley.cs186.database.index;
 
+import edu.berkeley.cs186.database.DatabaseException;
 import edu.berkeley.cs186.database.TransactionContext;
+import edu.berkeley.cs186.database.cli.parser.ParseException;
 import edu.berkeley.cs186.database.common.Pair;
 import edu.berkeley.cs186.database.concurrency.LockContext;
 import edu.berkeley.cs186.database.concurrency.LockType;
@@ -294,8 +296,28 @@ public class BPlusTree {
         // Note: You should NOT update the root variable directly.
         // Use the provided updateRoot() helper method to change
         // the tree's root if the old root splits.
+        if (root != root.getLeftmostLeaf()) {
+            throw new DatabaseException("Tree is not empty when bulk load");
+        }
+        Optional<Pair<DataBox, Long>> bulkLoadOnRootRes = root.bulkLoad(data, fillFactor);
 
-        return;
+        if (!bulkLoadOnRootRes.isPresent()) {
+            // bulk load finished, if there is more data, root node must be split.
+            return;
+        }
+
+        List<DataBox> newKeys = new ArrayList<>();
+        newKeys.add(bulkLoadOnRootRes.get().getFirst());
+        List<Long> newChildren = new ArrayList<>();
+        newChildren.add(root.getPage().getPageNum());
+        newChildren.add(bulkLoadOnRootRes.get().getSecond());
+
+        InnerNode newRoot = new InnerNode(metadata, bufferManager, newKeys, newChildren, lockContext);
+        updateRoot(newRoot);
+
+        if (data.hasNext()) {
+            root.bulkLoad(data, fillFactor);
+        }
     }
 
     /**
