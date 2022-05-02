@@ -101,16 +101,16 @@ public class TestBPlusTree {
             xs.add(iter.next());
             newIOs = bufferManager.getNumIOs();
             maxIOs = maxIOsOverride.hasNext() ? maxIOsOverride.next() : MAX_IO_PER_NEXT;
-//            assertFalse("too many I/Os used per next() call (" + (newIOs - prevIOs) + " > " + maxIOs +
-//                        ") - are you materializing more than you need?",
-//                        newIOs - prevIOs > maxIOs);
+            assertFalse("too many I/Os used per next() call (" + (newIOs - prevIOs) + " > " + maxIOs +
+                        ") - are you materializing more than you need?",
+                        newIOs - prevIOs > maxIOs);
         }
 
         long finalIOs = bufferManager.getNumIOs();
         maxIOs = xs.size() / (2 * metadata.getOrder());
-//        assertTrue("too few I/Os used overall (" + (finalIOs - initialIOs) + " < " + maxIOs +
-//                   ") - are you materializing before the iterator is even constructed?",
-//                   (finalIOs - initialIOs) >= maxIOs);
+        assertTrue("too few I/Os used overall (" + (finalIOs - initialIOs) + " < " + maxIOs +
+                   ") - are you materializing before the iterator is even constructed?",
+                   (finalIOs - initialIOs) >= maxIOs);
         return xs;
     }
 

@@ -452,7 +452,6 @@ public class BPlusTree {
         // TODO(proj2): Add whatever fields and constructors you want here.
         private Iterator<RecordId> currentRidIt;
         private LeafNode currentLeafNode;
-        private DataBox comparedKey = null;
 
         public BPlusTreeIterator() {
             currentLeafNode = root.getLeftmostLeaf();
@@ -460,8 +459,7 @@ public class BPlusTree {
         }
 
         public BPlusTreeIterator(DataBox key) {
-            currentLeafNode = root.getLeftmostLeaf();
-            comparedKey = key;
+            currentLeafNode = root.get(key);
             currentRidIt = currentLeafNode.scanGreaterEqual(key);
         }
 
@@ -479,11 +477,7 @@ public class BPlusTree {
             }
             if (currentLeafNode.hasRightSibling()) {
                 currentLeafNode = currentLeafNode.getRightSibling().get();
-                if (comparedKey != null) {
-                    currentRidIt = currentLeafNode.scanGreaterEqual(comparedKey);
-                } else {
-                    currentRidIt = currentLeafNode.scanAll();
-                }
+                currentRidIt = currentLeafNode.scanAll();
                 return next();
             }
             throw new NoSuchElementException();
