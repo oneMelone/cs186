@@ -108,6 +108,42 @@ public class TestSortMergeJoin {
 
     @Test
     @Category(PublicTests.class)
+    public void test1RecordsForDebugging() {
+        d.setWorkMem(5); // B=5
+        try(Transaction transaction = d.beginTransaction()) {
+            setSourceOperators(
+                    TestUtils.createSourceWithAllTypes(1),
+                    TestUtils.createSourceWithAllTypes(1),
+                    transaction
+            );
+
+            startCountIOs();
+
+            JoinOperator joinOperator = new SortMergeOperator(
+                    leftSourceOperator, rightSourceOperator, "int", "int",
+                    transaction.getTransactionContext());
+            checkIOs(0);
+
+            Iterator<Record> outputIterator = joinOperator.iterator();
+            checkIOs(2 * (1 + (1 + TestSortOperator.NEW_RUN_IOS)));
+
+            int numRecords = 0;
+            Record expected = new Record(true, 1, "a", 1.2f, true, 1, "a", 1.2f);
+
+            while (outputIterator.hasNext() && numRecords < 1) {
+                assertEquals("mismatch at record " + numRecords, expected, outputIterator.next());
+                numRecords++;
+            }
+            checkIOs(0);
+
+            assertFalse("too many records", outputIterator.hasNext());
+            outputIterator.hasNext();
+            assertEquals("too few records", 1, numRecords);
+        }
+    }
+
+    @Test
+    @Category(PublicTests.class)
     public void testSimpleSortMergeJoin() {
         d.setWorkMem(5); // B=5
         try(Transaction transaction = d.beginTransaction()) {
