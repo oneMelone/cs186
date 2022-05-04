@@ -670,6 +670,43 @@ public class QueryPlan {
         //      calculate the cheapest join with the new table (the one you
         //      fetched an operator for from pass1Map) and the previously joined
         //      tables. Then, update the result map if needed.
+        for (Set<String> prevTableSet : prevMap.keySet()) {
+            QueryOperator queryOperatorLeft = prevMap.get(prevTableSet);
+            for (JoinPredicate joinPredicate : joinPredicates) {
+                // go through each join predicate, find those
+                String leftTable = joinPredicate.leftTable;
+                String rightTable = joinPredicate.rightTable;
+
+                String targetTable;
+                String leftColumn = joinPredicate.leftColumn;
+                String rightColumn = joinPredicate.rightColumn;
+                QueryOperator bestQueryOperator;
+
+                if (prevTableSet.contains(leftTable) && !prevTableSet.contains(rightTable)) {
+                    // in this case, leftTable was already joined while rightTable wasn't
+                    targetTable = rightTable;
+                    Set<String> tableInPass1 = new HashSet<>();
+                    tableInPass1.add(targetTable);
+                    QueryOperator singleAccess = pass1Map.get(tableInPass1);
+                    bestQueryOperator = minCostJoinType(prevMap.get(prevTableSet), singleAccess, leftColumn, rightColumn);
+                } else if (prevTableSet.contains(rightTable) && !prevTableSet.contains(leftTable)) {
+                    // in this case, rightTable was already joined while leftTable wasn't
+                    targetTable = leftTable;
+                    Set<String> tableInPass1 = new HashSet<>();
+                    tableInPass1.add(targetTable);
+                    QueryOperator singleAccess = pass1Map.get(tableInPass1);
+                    bestQueryOperator = minCostJoinType(singleAccess, prevMap.get(prevTableSet), leftColumn, rightColumn);
+                } else {
+                    // in this case, leftTable and rightTable were both joined, or both not joined,
+                    //  which means they are not considered to be joined in this pass.
+                    continue;
+                }
+                Set<String> setAfterJoin = new HashSet<>();
+                setAfterJoin.addAll(prevTableSet);
+                setAfterJoin.add(targetTable);
+                result.put(setAfterJoin, bestQueryOperator);
+            }
+        }
         return result;
     }
 
@@ -719,7 +756,30 @@ public class QueryPlan {
         // Set the final operator to the lowest cost operator from the last
         // pass, add group by, project, sort and limit operators, and return an
         // iterator over the final operator.
-        return this.executeNaive(); // TODO(proj3_part2): Replace this!
+        // total pass number N
+
+        Map<Set<String>, QueryOperator> pass1Map = new HashMap<>();
+        for (String table: tableNames) {
+            QueryOperator queryOperator = minCostSingleAccess(table);
+            Set<String> oneSet = new HashSet<>();
+            oneSet.add(table);
+            pass1Map.put(oneSet, queryOperator);
+        }
+
+        // for pass 2, prevMap is pass1Map
+        Map<Set<String>, QueryOperator> prevMap = pass1Map;
+        for (int i = 1; i < tableNames.size(); i++) {
+            // dynamic programming, calculate min cost iteratively
+            prevMap = minCostJoins(prevMap, pass1Map);
+        }
+        finalOperator = minCostOperator(prevMap);
+        // add all remained operators
+        this.addGroupBy();
+        this.addProject();
+        this.addSort();
+        this.addLimit();
+
+        return finalOperator.iterator(); // TODO(proj3_part2): Replace this!
     }
 
     // EXECUTE NAIVE ///////////////////////////////////////////////////////////
