@@ -1,5 +1,8 @@
 package edu.berkeley.cs186.database.concurrency;
 
+import java.lang.reflect.Array;
+import java.util.*;
+
 /**
  * Utility methods to track the relationships between different lock types.
  */
@@ -10,6 +13,18 @@ public enum LockType {
     IX,  // intention exclusive
     SIX, // shared intention exclusive
     NL;  // no lock held
+
+    private static Map<LockType, Integer> getCommonLockTypeToIndex() {
+        Map<LockType, Integer> lockTypeToIndex = new HashMap<>();
+        lockTypeToIndex.put(NL, 0);
+        lockTypeToIndex.put(IS, 1);
+        lockTypeToIndex.put(IX, 2);
+        lockTypeToIndex.put(S, 3);
+        lockTypeToIndex.put(SIX, 4);
+        lockTypeToIndex.put(X, 5);
+
+        return lockTypeToIndex;
+    }
 
     /**
      * This method checks whether lock types A and B are compatible with
@@ -23,7 +38,19 @@ public enum LockType {
         }
         // TODO(proj4_part1): implement
 
-        return false;
+        // this is a matrix about compatibility, while the row and the column indices
+        //  are bound to different types, as can be got in map lockTypeToIndex.
+        ArrayList<List<Boolean>> compatibilityMatrix = new ArrayList<>();
+        compatibilityMatrix.add(Arrays.asList(true, true, true, true, true, true));
+        compatibilityMatrix.add(Arrays.asList(true, true, true, true, true, false));
+        compatibilityMatrix.add(Arrays.asList(true, true, true, false, false, false));
+        compatibilityMatrix.add(Arrays.asList(true, true, false, true, false, false));
+        compatibilityMatrix.add(Arrays.asList(true, true, false, false, false, false));
+        compatibilityMatrix.add(Arrays.asList(true, false, false, false, false, false));
+
+        Map<LockType, Integer> lockTypeToIndex = getCommonLockTypeToIndex();
+
+        return compatibilityMatrix.get(lockTypeToIndex.get(a)).get(lockTypeToIndex.get(b));
     }
 
     /**
@@ -54,8 +81,19 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        // If the row index can be the parent of the column index, then true, otherwise false
+        ArrayList<List<Boolean>> canBeParentMatrix = new ArrayList<>();
+        canBeParentMatrix.add(Arrays.asList(true, false, false, false, false, false));
+        canBeParentMatrix.add(Arrays.asList(true, true, false, true, false, false));
+        canBeParentMatrix.add(Arrays.asList(true, true, true, true, true, true));
+        List<Boolean> remainedRows = Arrays.asList(true, false, false, false, false, false);
+        for (int i = 0; i < 3; i++) {
+             canBeParentMatrix.add(remainedRows);
+        }
 
-        return false;
+        Map<LockType, Integer> lockTypeToIndex = getCommonLockTypeToIndex();
+
+        return canBeParentMatrix.get(lockTypeToIndex.get(parentLockType)).get(lockTypeToIndex.get(childLockType));
     }
 
     /**
@@ -69,8 +107,18 @@ public enum LockType {
             throw new NullPointerException("null lock type");
         }
         // TODO(proj4_part1): implement
+        // If the row index can be substitute for the column index, then true
+        ArrayList<List<Boolean>> substitutablityMatrix= new ArrayList<>();
+        substitutablityMatrix.add(Arrays.asList(true, false, false, false, false, false));
+        substitutablityMatrix.add(Arrays.asList(true, true, false, false, false, false));
+        substitutablityMatrix.add(Arrays.asList(true, true, true, false, false, false));
+        substitutablityMatrix.add(Arrays.asList(true, false, false, true, false, false));
+        substitutablityMatrix.add(Arrays.asList(true, false, false, true, true, false));
+        substitutablityMatrix.add(Arrays.asList(true, false, false, true, false, true));
 
-        return false;
+        Map<LockType, Integer> lockTypeToIndex = getCommonLockTypeToIndex();
+
+        return substitutablityMatrix.get(lockTypeToIndex.get(substitute)).get(lockTypeToIndex.get(required));
     }
 
     /**
