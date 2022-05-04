@@ -577,7 +577,31 @@ public class QueryPlan {
         QueryOperator minOp = new SequentialScanOperator(this.transaction, table);
 
         // TODO(proj3_part2): implement
-        return minOp;
+        int currentEstimateIOCost = minOp.estimateIOCost();
+        List<Integer> eligibleIndexColumns = getEligibleIndexColumns(table);
+        int bestIndexScanColumn = -1;
+
+        for (Integer column : eligibleIndexColumns) {
+            SelectPredicate selectPredicate = selectPredicates.get(column);
+            IndexScanOperator indexScanOperator = new IndexScanOperator(transaction, table, selectPredicate.column, selectPredicate.operator, selectPredicate.value);
+            int indexCost = indexScanOperator.estimateIOCost();
+            if (indexCost <= currentEstimateIOCost) {
+                currentEstimateIOCost = indexCost;
+                bestIndexScanColumn = column;
+                minOp = indexScanOperator;
+            }
+        }
+        
+        QueryOperator finalOperator;
+        // add select operator to scan operator
+        if (minOp.isSequentialScan()) {
+            finalOperator = addEligibleSelections(minOp, -1);
+        } else {
+            // already used for index scan, needn't apply it again.
+            finalOperator = addEligibleSelections(minOp, bestIndexScanColumn);
+        }
+
+        return finalOperator;
     }
 
     // Task 6: Join Selection //////////////////////////////////////////////////
