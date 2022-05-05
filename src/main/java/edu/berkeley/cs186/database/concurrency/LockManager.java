@@ -110,21 +110,18 @@ public class LockManager {
             // TODO(proj4_part1): implement
             for (LockRequest lockRequest : waitingQueue) {
                 if (checkCompatible(lockRequest.lock.lockType, -1)) {
-                    locks.add(lockRequest.lock);
-                    lockRequest.transaction.unblock();
-                    // release locks in the releaseNames
-                    List<Lock> allLocksHeldByTransaction = transactionLocks.get(lockRequest.transaction.getTransNum());
-                    List<Lock> shouldDelete = new ArrayList<>();
-                    for (Lock lock : allLocksHeldByTransaction) {
-                        if (lockRequest.releasedLocks.contains(lock)) {
-                            getResourceEntry(lock.name).releaseLock(lock);
-                            shouldDelete.add(lock);
+                    if (lockRequest.releasedLocks.isEmpty()) {
+                        // call acquire
+                        acquire(lockRequest.transaction, lockRequest.lock.name, lockRequest.lock.lockType);
+                    } else {
+                        // call acquireAndRelease
+                        List<ResourceName> requestResourceNames = new ArrayList<>();
+                        for (Lock lock : lockRequest.releasedLocks) {
+                            requestResourceNames.add(lock.name);
                         }
+                        acquireAndRelease(lockRequest.transaction, lockRequest.lock.name, lockRequest.lock.lockType, requestResourceNames);
                     }
-
-                    for (Lock lock : shouldDelete) {
-                        allLocksHeldByTransaction.remove(lock);
-                    }
+                    lockRequest.transaction.unblock();
                 } else {
                     break;
                 }
@@ -302,7 +299,25 @@ public class LockManager {
         // TODO(proj4_part1): implement
         // You may modify any part of this method.
         synchronized (this) {
-            
+            List<Lock> allLocksHeldByTransaction = transactionLocks.get(transaction.getTransNum());
+            ResourceEntry resourceEntry = getResourceEntry(name);
+            // check if no lock on 'name' is held by 'transaction' while iterating.
+            if (allLocksHeldByTransaction == null) throw new NoLockHeldException("No such lock held!");
+            else {
+                boolean noSuchLockHeldFlag = true;
+                List<Lock> shouldRemoveLocks = new ArrayList<>();
+                for (Lock lock : allLocksHeldByTransaction) {
+                    if (lock.name == name) {
+                        noSuchLockHeldFlag = false;
+                        resourceEntry.releaseLock(lock);
+                        shouldRemoveLocks.add(lock);
+                    }
+                }
+                for (Lock lock :shouldRemoveLocks) {
+                    allLocksHeldByTransaction.remove(lock);
+                }
+                if (noSuchLockHeldFlag) throw new NoLockHeldException("No such lock held!");
+            }
         }
     }
 
@@ -348,6 +363,7 @@ public class LockManager {
     public synchronized LockType getLockType(TransactionContext transaction, ResourceName name) {
         // TODO(proj4_part1): implement
         List<Lock> locks = transactionLocks.get(transaction.getTransNum());
+        if  (locks == null) return LockType.NL;
         for (Lock lock : locks) {
             if (lock.name == name) {
                 return lock.lockType;
