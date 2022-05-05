@@ -1,5 +1,6 @@
 package edu.berkeley.cs186.database.concurrency;
 
+import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.TransactionContext;
 
 import javax.annotation.Resource;
@@ -162,6 +163,16 @@ public class LockManager {
         return resourceEntries.get(name);
     }
 
+    private void grantNewLock(ResourceEntry resourceEntry, Lock newLock, TransactionContext transaction) {
+        resourceEntry.grantOrUpdateLock(newLock);
+        transactionLocks.putIfAbsent(transaction.getTransNum(), new ArrayList<>());
+        List<Lock> allLocksHeldByTransaction = transactionLocks.get(transaction.getTransNum());
+        if (allLocksHeldByTransaction.contains(newLock)) {
+            throw new DuplicateLockRequestException("Duplicate locks acquired during acquireAndRelease");
+        }
+        allLocksHeldByTransaction.add(newLock);
+    }
+
     /**
      * Acquire a `lockType` lock on `name`, for transaction `transaction`, and
      * releases all locks on `releaseNames` held by the transaction after
@@ -198,13 +209,7 @@ public class LockManager {
             Lock newLock = new Lock(name, lockType, transaction.getTransNum());
             if (resourceEntry.checkCompatible(lockType, transaction.getTransNum())) {
                 // generate a new lock, add to transactionLock and resourceEntry
-                resourceEntry.grantOrUpdateLock(newLock);
-                transactionLocks.putIfAbsent(transaction.getTransNum(), new ArrayList<>());
-                List<Lock> allLocksHeldByTransaction = transactionLocks.get(transaction.getTransNum());
-                if (allLocksHeldByTransaction.contains(newLock)) {
-                    throw new DuplicateLockRequestException("Duplicate locks acquired during acquireAndRelease");
-                }
-                allLocksHeldByTransaction.add(newLock);
+                grantNewLock(resourceEntry, newLock, transaction);
 
                 // release locks in the releaseNames
                 List<Lock> shouldDelete = new ArrayList<>();
@@ -212,6 +217,7 @@ public class LockManager {
                 for (int i = 0; i < releaseNames.size(); i++) {
                     releaseFlags.add(false);
                 }
+                List<Lock> allLocksHeldByTransaction = transactionLocks.get(transaction.getTransNum());
                 for (Lock lock : allLocksHeldByTransaction) {
                     if (releaseNames.contains(lock.name) && !lock.equals(newLock)) {
                         getResourceEntry(lock.name).releaseLock(lock);
@@ -259,7 +265,22 @@ public class LockManager {
         // synchronized block elsewhere if you wish.
         boolean shouldBlock = false;
         synchronized (this) {
-            
+           ResourceEntry resourceEntry = getResourceEntry(name);
+           Lock newLock = new Lock(name, lockType, transaction.getTransNum());
+           List<Lock> allLocksHeldByTransaction = transactionLocks.get(transaction.getTransNum());
+           if (allLocksHeldByTransaction != null && allLocksHeldByTransaction.contains(newLock)) {
+               throw new DuplicateLockRequestException("Duplicate Lock Request in aquire method");
+           }
+
+           if (resourceEntry.checkCompatible(lockType, -1)) {
+               // grant the lock immediately
+               grantNewLock(resourceEntry, newLock, transaction);
+           } else {
+               // add to the waiting queue
+               resourceEntry.addToQueue(new LockRequest(transaction, newLock), false);
+               transaction.prepareBlock();
+               shouldBlock = true;
+           }
         }
         if (shouldBlock) {
             transaction.block();
