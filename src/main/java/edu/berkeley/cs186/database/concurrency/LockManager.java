@@ -4,6 +4,7 @@ import edu.berkeley.cs186.database.Transaction;
 import edu.berkeley.cs186.database.TransactionContext;
 
 import javax.annotation.Resource;
+import java.io.InvalidObjectException;
 import java.util.*;
 
 /**
@@ -108,11 +109,13 @@ public class LockManager {
             Iterator<LockRequest> requests = waitingQueue.iterator();
 
             // TODO(proj4_part1): implement
-            for (LockRequest lockRequest : waitingQueue) {
+            while (requests.hasNext()) {
+                LockRequest lockRequest = requests.next();
                 if (checkCompatible(lockRequest.lock.lockType, -1)) {
                     if (lockRequest.releasedLocks.isEmpty()) {
+                        waitingQueue.pollFirst();
                         // call acquire
-                        acquire(lockRequest.transaction, lockRequest.lock.name, lockRequest.lock.lockType);
+                        acquireAndRelease(lockRequest.transaction, lockRequest.lock.name, lockRequest.lock.lockType, new ArrayList<ResourceName>());
                     } else {
                         // call acquireAndRelease
                         List<ResourceName> requestResourceNames = new ArrayList<>();
@@ -234,11 +237,11 @@ public class LockManager {
                 }
             } else {
                 resourceEntry.addToQueue(new LockRequest(transaction, newLock), true);
-                transaction.prepareBlock();
+                if (!transaction.getBlocked()) transaction.prepareBlock();
                 shouldBlock = true;
             }
         }
-        if (shouldBlock) {
+        if (shouldBlock && !transaction.getBlocked()) {
             transaction.block();
         }
     }
@@ -269,14 +272,22 @@ public class LockManager {
                throw new DuplicateLockRequestException("Duplicate Lock Request in aquire method");
            }
 
-           if (resourceEntry.checkCompatible(lockType, -1)) {
-               // grant the lock immediately
-               grantNewLock(resourceEntry, newLock, transaction);
+           if (resourceEntry.waitingQueue.isEmpty()) {
+               if (resourceEntry.checkCompatible(lockType, -1)) {
+                   // grant the lock immediately
+                   grantNewLock(resourceEntry, newLock, transaction);
+               } else {
+                   // add to the waiting queue
+                   resourceEntry.addToQueue(new LockRequest(transaction, newLock), false);
+                   shouldBlock = true;
+               }
            } else {
-               // add to the waiting queue
                resourceEntry.addToQueue(new LockRequest(transaction, newLock), false);
-               transaction.prepareBlock();
                shouldBlock = true;
+           }
+
+           if (shouldBlock) {
+               transaction.prepareBlock();
            }
         }
         if (shouldBlock) {
@@ -346,14 +357,37 @@ public class LockManager {
                         LockType newLockType)
             throws DuplicateLockRequestException, NoLockHeldException, InvalidLockException {
         // TODO(proj4_part1): implement
-        // You may modify any part of this method.
-        boolean shouldBlock = false;
+       boolean shouldBlock = false;
         synchronized (this) {
-            
+            ResourceEntry thisEntry = getResourceEntry(name);
+            if (thisEntry.getTransactionLockType(transaction.getTransNum()) == newLockType)
+                throw new DuplicateLockRequestException("There is already a lock by" + transaction.getTransNum()
+                        + "on" + name.toString() + "which type is new one, " + newLockType.toString());
+            if (thisEntry.getTransactionLockType(transaction.getTransNum()) == LockType.NL)
+                // NL is no locks
+                throw new NoLockHeldException("There is no lock by" + transaction.getTransNum() +
+                        "on" + name.toString());
+            LockType oldType = thisEntry.getTransactionLockType(transaction.getTransNum());
+            if (!(oldType != newLockType && LockType.substitutable(newLockType, oldType))) {
+                throw new InvalidLockException("The new type" + newLockType.toString() +
+                            "is not a promotion to old lock type" + oldType.toString());
+            }
+            if (!thisEntry.checkCompatible(newLockType, transaction.getTransNum())) {
+                shouldBlock = true;
+                transaction.prepareBlock();
+                thisEntry.addToQueue(new LockRequest(transaction, new Lock(name, newLockType, transaction.getTransNum())), true);
+            } else {
+                for (Lock oldLock: transactionLocks.get(transaction.getTransNum())) {
+                    if (oldLock.name.equals(name)) {
+                        oldLock.lockType = newLockType;
+                    }
+                }
+                thisEntry.grantOrUpdateLock(new Lock(name, newLockType, transaction.getTransNum()));
+            }
         }
         if (shouldBlock) {
             transaction.block();
-        }
+        } 
     }
 
     /**
